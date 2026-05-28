@@ -5,6 +5,7 @@ import (
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 
 	"github.com/grafana/grafana-prometheus-datasource/pkg/promlib"
 )
@@ -28,8 +29,23 @@ func ProvideService(httpClientProvider *sdkhttpclient.Provider) *Service {
 	plog := backend.NewLoggerWith("logger", "tsdb.prometheus")
 	plog.Debug("Initializing")
 	return &Service{
-		lib: promlib.NewService(httpClientProvider, plog, nil),
+		lib: promlib.NewService(httpClientProvider, plog, extendOptions),
 	}
+}
+
+// extendOptions is the promlib.ExtendOptions callback for the Prometheus
+// data source. Add new providers (Azure, AWS, ...) by appending another call
+// below; errors short-circuit the chain.
+func extendOptions(
+	ctx context.Context,
+	settings backend.DataSourceInstanceSettings,
+	opts *sdkhttpclient.Options,
+	logger log.Logger,
+) error {
+	if err := googleAuthExtendOptions(ctx, settings, opts, logger); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Service) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
